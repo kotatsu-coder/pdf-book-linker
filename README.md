@@ -121,7 +121,10 @@ Common overrides:
 | Set the number of index columns | `"index": {"columns": 3}` |
 | Set the printed-page mapping | `"pagemap": {"segments": [{"pdf_index0_start": 8, "pdf_index0_end": 218, "print_start": 1, "style": "arabic"}]}` |
 | Button position | `"nav": {"position": {"left": "bottom-outer", "right": "outer-edge"}}` (`bottom-centre` / `bottom-outer` / `top-outer` / `outer-edge`) |
-| Button size | `"nav": {"size": 0.05}` (a fraction of the page width) |
+| Button size | `"nav": {"size": 0.05}` — a fraction of the displayed page width (default 0.055, about 9 mm on an 11-inch iPad) |
+| Smallest size on crowded pages | `"nav": {"min_size": 0.04}` (default 0.045, about 7 mm) |
+| Look | `"nav": {"style": "pill"}` — translucent rounded buttons like e-book viewer controls (default `"line"`: faint arrows) |
+| Pages with no free margin | `"nav": {"crowded": "overlay"}` draws the buttons on an opaque chip over the print (default `"skip"`) |
 | Button visibility | `"nav": {"contrast": 4.5}` — higher is more visible, lower is fainter (default 3.0) |
 | Button colour / opacity | `"nav": {"color": "#1a3c8c", "opacity": 0.4}` (default `"auto"` for both) |
 

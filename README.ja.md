@@ -116,7 +116,10 @@ uv run pdf-book-linker build "本.pdf" -o "output/本_linked.pdf" --config "本.
 | 索引の段数を指定 | `"index": {"columns": 3}` |
 | 印刷ページ番号との対応を指定 | `"pagemap": {"segments": [{"pdf_index0_start": 8, "pdf_index0_end": 218, "print_start": 1, "style": "arabic"}]}` |
 | ナビの位置 | `"nav": {"position": {"left": "bottom-outer", "right": "outer-edge"}}`（`bottom-centre` / `bottom-outer` / `top-outer` / `outer-edge`） |
-| ナビの大きさ | `"nav": {"size": 0.05}`（ページ幅に対する比率） |
+| ナビの大きさ | `"nav": {"size": 0.05}`（表示時のページ幅に対する比率。既定 0.055 で、11インチ iPad なら約9mm） |
+| 余白が狭いページでの最小サイズ | `"nav": {"min_size": 0.04}`（既定 0.045、約7mm） |
+| 見た目 | `"nav": {"style": "pill"}`（電子書籍アプリの操作ボタン風の半透明の角丸。既定 `"line"` は薄い矢印だけ） |
+| 余白がまったくないページ | `"nav": {"crowded": "overlay"}`（不透明な下地を敷いて印字の上に描く。既定 `"skip"` は省略） |
 | ナビの見やすさ | `"nav": {"contrast": 4.5}`（大きいほどはっきり、小さいほど控えめ。既定 3.0） |
 | ナビの色・濃さを固定 | `"nav": {"color": "#1a3c8c", "opacity": 0.4}`（どちらも既定は `"auto"`） |
 

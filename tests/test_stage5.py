@@ -287,3 +287,56 @@ def test_nav_accepts_flat_coloured_background(tmp_path):
     q=doc.new_page(width=400,height=600)
     q.draw_rect(f.Rect(100,500,300,600),color=None,fill=(0,0,0))
     assert not Raster(q).clear(f.Rect(150,540,250,590))  # solid printed block on white paper
+
+
+def _crowded_doc(full_pages, side_free=True):
+    """Normal pages: only the bottom margin is free (header bar, edge tabs).
+    Crowded pages: print down to the bottom edge; side margins free or not."""
+    import pymupdf as f
+    d=f.open()
+    for i in range(8):
+        p=d.new_page(width=400,height=600)
+        p.insert_text((40,120),'Synthetic body text',fontsize=11)
+        if i in full_pages:
+            x0,x1=(40,330) if side_free else (2,340)
+            for y in range(140 if side_free else 10,600,11):        # text lines down to the bottom edge
+                p.insert_text((x0,y),'Densely set body text line ' * 3,fontsize=10)
+                if not side_free: p.insert_text((330,y),'margin note text',fontsize=10)
+        else:
+            p.draw_rect(f.Rect(0,0,400,40),color=None,fill=(.2,.2,.2))      # running header bar
+            for x in (0,380):
+                p.draw_rect(f.Rect(x,40,x+20,560),color=None,fill=(.2,.2,.2))  # thumb-index tabs
+
+
+    return d
+
+
+def test_nav_display_size_follows_page_shape():
+    from pdf_book_linker.navigation import geometry
+    assert geometry(400,600)['tap_size']==pytest.approx(22)           # portrait: page width
+    assert geometry(1000,600)['tap_size']==pytest.approx(600*.75*.055) # landscape: limited by height
+
+
+def test_nav_crowded_pages_fall_back_then_skip_or_overlay():
+    from pdf_book_linker.navigation import plan
+    d=_crowded_doc({6,7})
+    placements,report=plan(d,range(8),{})
+    m={x['page']:x for x in report['measurements']}
+    assert all(m[i]['status']=='approved' for i in range(8))
+    assert m[6]['fallback']=='other-position' and m[6]['position']!=m[0]['position']
+    fixed,report=plan(d,range(8),{'position':'bottom-centre'})
+    assert {x['page'] for x in report['measurements'] if x['status']=='review'}=={6,7}   # fixed place: no moving
+    d=_crowded_doc({6,7},side_free=False)
+    _,report=plan(d,range(8),{})
+    assert {x['page'] for x in report['measurements'] if x['status']=='review'}=={6,7}
+    over,report=plan(d,range(8),{'crowded':'overlay'})
+    assert 6 in over and over[6][1]['backdrop'] and over[6][1]['pill_rgb']
+    with pytest.raises(ValueError): plan(d,range(8),{'crowded':'cover'})
+
+
+def test_nav_pill_style_and_min_size():
+    from pdf_book_linker.navigation import button_style, size_from
+    s=button_style((1.,1.,1.),{'style':'pill'})
+    assert s['style']=='pill' and s['pill_rgb'][0]<.5 and s['rgb'][0]>.5   # dark chip, white arrow
+    assert size_from({'min_size':.04},'min_size',.045,400)==pytest.approx(16)
+    with pytest.raises(ValueError): button_style((1.,1.,1.),{'style':'round'})

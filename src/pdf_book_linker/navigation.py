@@ -7,11 +7,34 @@ def section_starts(primary,extra,count):
     if any(type(i) is not int or not 0<=i<count for i in extra): raise ValueError('nav.extra_starts が不正です')
     return sorted(set(primary)|set(extra))
 
+STYLES = ('line', 'pill')
+CROWDED = ('skip', 'overlay')
+
+
+def display_base(width, height):
+    """Page width as it is shown when fitted to a portrait tablet screen.
+
+    Portrait pages fill the screen width; wide or square pages are limited by
+    the height instead (about 3:4 on an iPad), so the buttons keep roughly the
+    same physical size on screen whatever the PDF page size is.
+    """
+    return min(width, height*.75)
+
+
 def geometry(width, height):
-    # 5.5% of a 175 mm displayed page = 9.6 mm. Clamps are relative to height.
-    size = min(max(width * .055,16),150,height*.1)
-    return dict(tap_size=size, gap=width*.012, line_width=width*.0015,
-                gray=.7, opacity=.35, relative=True)
+    # 5.5% of the displayed width is about 9 mm on an 11-inch iPad, close to
+    # Material Design's 48 dp touch target (Apple's minimum is 44 pt, ~7 mm).
+    base = display_base(width, height)
+    size = min(max(base * .055,16),150)
+    return dict(tap_size=size, gap=base*.012, line_width=base*.0015,
+                gray=.7, opacity=.35, relative=True, base=base)
+
+
+def size_from(cfg, key, default, base):
+    value = cfg.get(key, default)
+    value = float(value)
+    if value <= 0: raise ValueError(f'nav.{key} は正の数です')
+    return value*base if value <= 1 else value
 
 
 def _linear(v):
@@ -66,8 +89,25 @@ def button_style(background, cfg):
     opacity=float(opacity)
     if not 0<opacity<=1: raise ValueError('nav.opacity は 0〜1 または "auto" です')
     blend=tuple(opacity*c+(1-opacity)*b for c,b in zip(colour,background))
-    return dict(rgb=[round(v,4) for v in colour],opacity=round(opacity,3),
-                background=[round(v,4) for v in background],contrast=round(contrast(blend,background),2))
+    out=dict(rgb=[round(v,4) for v in colour],opacity=round(opacity,3),
+             background=[round(v,4) for v in background],contrast=round(contrast(blend,background),2))
+    style=cfg.get('style','line')
+    if style not in STYLES: raise ValueError('nav.style は "line" か "pill" です: '+str(style))
+    out['style']=style
+    if style=='pill':
+        # Like the translucent controls of e-book viewers: a rounded chip in
+        # the contrasting colour, with the arrow in the page colour on top.
+        out.update(pill_rgb=out['rgb'],pill_opacity=max(.45,out['opacity']),
+                   rgb=[1.,1.,1.] if luminance(colour)<.5 else [.12,.12,.15],opacity=.95)
+    return out
+
+
+def overlay_style(page_background, cfg):
+    """Style for crowded pages (nav.crowded="overlay"): an opaque chip in the
+    page colour hides the print underneath, and the arrow is drawn on it."""
+    out=button_style(page_background,{k:v for k,v in cfg.items() if k!='style'})
+    out.update(style='overlay',backdrop=True,pill_rgb=[round(v,4) for v in page_background],pill_opacity=.92)
+    return out
 
 def regions(width, height, position, side, size, gap, shift=0, anchor=.5):
     outer_left = side == 'left'
@@ -91,14 +131,17 @@ class Raster:
         self.data = self.pix.samples
         self.rgb = page.get_pixmap(matrix=f.Matrix(self.scale,self.scale), colorspace=f.csRGB, alpha=False)
         self.bounds = page.rect
-        # Page background = median grey of a thin frame around the page edge.
+        # Page background = median over a sparse grid of the whole page: paper
+        # on text pages, the fill colour on full-bleed title pages. (A border
+        # frame alone is fooled by thumb-index tabs and edge decorations.)
         w,h,s = self.pix.width,self.pix.height,self.pix.stride
-        m = max(1,int(min(w,h)*.02)); frame = []
-        for y in range(0,h,3):
-            row = self.data[y*s:y*s+w]
-            frame.extend(row[:m:2]); frame.extend(row[w-m::2])
-            if y < m or y >= h-m: frame.extend(row[::4])
-        self.page_background = sorted(frame)[len(frame)//2] if frame else 255
+        grey=[]; chans=([],[],[]); rs,n,rstride = self.rgb.samples,self.rgb.n,self.rgb.stride
+        for y in range(0,h,7):
+            for x in range(0,w,7):
+                grey.append(self.data[y*s+x]); k=y*rstride+x*n
+                for c in range(3): chans[c].append(rs[k+c])
+        self.page_background = sorted(grey)[len(grey)//2] if grey else 255
+        self.page_rgb = tuple(sorted(c)[len(c)//2]/255 for c in chans) if chans[0] else (1.,1.,1.)
     def _window(self, rect, pad=0):
         r = f.Rect(rect)+(-pad,-pad,pad,pad)
         if not self.bounds.contains(r): return None
@@ -121,7 +164,17 @@ class Raster:
         if hi-lo > UNIFORM_SPREAD: return False
         values = sorted(v for r in rows for v in r[::2])
         median = values[len(values)//2] if values else 255
-        return abs(median-self.page_background) <= UNIFORM_SPREAD
+        if abs(median-self.page_background) > UNIFORM_SPREAD: return False
+        # A full-bleed background reaches the page edge; a photo or box inside
+        # the margins does not. Extend the area to the nearest edges and recheck.
+        b = self.bounds; r = f.Rect(rect)
+        ext = f.Rect(b.x0 if r.x0 < b.width*.12 else r.x0, b.y0 if r.y0 < b.height*.12 else r.y0,
+                     b.x1 if r.x1 > b.width*.88 else r.x1, b.y1 if r.y1 > b.height*.88 else r.y1)
+        if ext == r: return True
+        x0,y0,x1,y1 = (max(0,int(ext.x0*self.scale)),max(0,int(ext.y0*self.scale)),
+                       min(self.pix.width,int(ext.x1*self.scale)+1),min(self.pix.height,int(ext.y1*self.scale)+1))
+        edge = [v for y in range(y0,y1,2) for v in self.data[y*self.pix.stride+x0:y*self.pix.stride+x1:2]]
+        return bool(edge) and max(edge)-min(edge) <= UNIFORM_SPREAD
     def background(self, rect):
         """Median sRGB colour (0..1) under rect."""
         w = self._window(rect)
@@ -151,8 +204,7 @@ def plan(doc, pages, cfg):
         outer_stats={anchor:[] for anchor in (.18,.35,.5,.65,.82)}
         for i in sample:
             p=doc[i]; raster=Raster(p); geo=geometry(p.rect.width,p.rect.height)
-            requested=cfg.get('size')
-            size=geo['tap_size'] if requested is None else (requested*p.rect.width if requested<=1 else requested)
+            size=geo['tap_size'] if cfg.get('size') is None else size_from(cfg,'size',.055,geo['base'])
             for pos in POSITIONS:
                 for anchor in (outer_stats if pos=='outer-edge' else (.5,)):
                     rs=regions(p.rect.width,p.rect.height,pos,side,size,geo['gap'],anchor=anchor)
@@ -172,24 +224,50 @@ def plan(doc, pages, cfg):
         decision[side]=dict(position=selected,sample_pages=sample,candidates=summary,
                             parity=parity,size_ratio=cfg.get('size',.055),opacity=cfg.get('opacity','auto'),
                             color=cfg.get('color','auto'),contrast=cfg.get('contrast',3.0),
-                            automatic_size_rule=dict(width_ratio=.055,min_pt=16,max_pt=150,height_limit_ratio=.1),
+                            style=cfg.get('style','line'),crowded=cfg.get('crowded','skip'),min_size=cfg.get('min_size',.045),
+                            automatic_size_rule=dict(display_width='min(page width, 0.75 x page height)',ratio=.055,
+                                                     min_ratio_when_crowded=cfg.get('min_size',.045),min_pt=16,max_pt=150),
                             outer_anchor_ratio=outer_anchor,outer_anchor_samples=outer_stats)
+        crowded=cfg.get('crowded','skip')
+        if crowded not in CROWDED: raise ValueError('nav.crowded は "skip" か "overlay" です: '+str(crowded))
+        # A position fixed in the settings is respected: only shrink there.
+        others=[] if override else sorted((x for x in POSITIONS if x!=selected),
+                      key=lambda k:(summary[k]['clear_fraction'],summary[k]['p10_clearance_ratio']),reverse=True)
         for i in ids:
             p=doc[i]; raster=Raster(p); geo=geometry(p.rect.width,p.rect.height)
             geo.update({k:cfg[k] for k in ('gray',) if k in cfg})
-            requested=cfg.get('size')
-            size=geo['tap_size'] if requested is None else (requested*p.rect.width if requested<=1 else requested)
-            geo['tap_size']=size
-            found=None; shift=0
-            for delta in (0,-.01,.01,-.02,.02):
-                rs=regions(p.rect.width,p.rect.height,selected,side,size,geo['gap'],delta*p.rect.width,outer_anchor)
-                if all(raster.clear(r,p.rect.width*.002) for r in rs): found=rs; shift=delta; break
-            measures.append(dict(page=i,side=side,position=selected,status='approved' if found else 'review',shift_ratio=shift,
-                                 reason='clear original raster' if found else 'ink present; skipped'))
+            W,H=p.rect.width,p.rect.height
+            size=geo['tap_size'] if cfg.get('size') is None else size_from(cfg,'size',.055,geo['base'])
+            minimum=min(size,size_from(cfg,'min_size',.045,geo['base']))
+            sizes=[size]
+            while sizes[-1]*.88>minimum: sizes.append(sizes[-1]*.88)
+            if sizes[-1]>minimum: sizes.append(minimum)
+            found=None; shift=0; used=(selected,size); fallback='none'
+            # Same place first (only smaller), so the buttons stay where the
+            # reader expects them; another place only when the page is full there.
+            for pos in [selected]+others:
+                for sz in sizes:
+                    anchor=outer_anchor if pos=='outer-edge' else .5
+                    for delta in (0,-.01,.01,-.02,.02):
+                        rs=regions(W,H,pos,side,sz,geo['gap']*sz/size,delta*W,anchor)
+                        if all(raster.clear(r,W*.002) for r in rs):
+                            found=rs; shift=delta; used=(pos,sz)
+                            fallback='none' if (pos,sz)==(selected,size) else ('smaller' if pos==selected else 'other-position')
+                            break
+                    if found: break
+                if found: break
+            if not found and crowded=='overlay':
+                found=regions(W,H,selected,side,size,geo['gap'],0,outer_anchor); used=(selected,size); fallback='overlay'
+            status='approved' if found else 'review'
+            reason={'none':'clear original raster','smaller':'clear after shrinking','other-position':'clear at another position',
+                    'overlay':'no clear margin; drawn on an opaque chip over the print (nav.crowded=overlay)'}[fallback] if found else 'ink present; skipped'
+            measures.append(dict(page=i,side=side,position=used[0],status=status,shift_ratio=shift,
+                                 size_ratio=round(used[1]/geo['base'],4),fallback=fallback if found else 'skipped',reason=reason))
             if found:
+                geo['tap_size']=used[1]; geo['line_width']*=used[1]/size
                 area=f.Rect(found[0])
                 for r in found[1:]: area|=r
-                geo.update(button_style(raster.background(area),cfg))
+                geo.update(overlay_style(raster.page_rgb,cfg) if fallback=='overlay' else button_style(raster.background(area),cfg))
                 placements[i]=(found,geo)
             f.TOOLS.store_shrink(100)
     return placements,dict(decisions=decision,measurements=measures,

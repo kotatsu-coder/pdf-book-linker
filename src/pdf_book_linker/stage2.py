@@ -276,6 +276,10 @@ def draw_button(p,c):
     r=f.Rect(c['rect']); x,y=(r.x0+r.x1)/2,(r.y0+r.y1)/2
     j=c['button']; direction=-1 if j<2 else 1; gray=c['style'].get('gray',.8)
     shape=p.new_shape()
+    if c['style'].get('pill_rgb'):
+        inset=r.width*.06
+        shape.draw_rect(r+(inset,inset,-inset,-inset),radius=.28)
+        shape.finish(color=None,fill=tuple(c['style']['pill_rgb']),fill_opacity=c['style'].get('pill_opacity',.5))
     scale=r.width/110
     for shift in ([-11,11] if j in (0,3) else [0]):
         xx=x+shift*scale
@@ -344,7 +348,7 @@ def verify_candidates(source,output,items,outline,page_indices=None,strict=False
             else:
                 if len(b[c['source_pdf_index0']].get_drawings())<=len(a[ids[c['source_pdf_index0']]].get_drawings()):
                     errors.append('ナビのベクター描画がありません')
-                if strict:
+                if strict and not c.get('style',{}).get('backdrop'):
                     src=ids[c['source_pdf_index0']]
                     if not source_raster(src).clear(f.Rect(c['rect'])*a[src].rotation_matrix):
                         errors.append(f'ナビが元の印字と重なっています: {src}')
