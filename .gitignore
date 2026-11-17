@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+config.local.yaml
+*.secret
+.vscode/
+output/
+work/
+*.log
+*.pdf
+.uv-cache/
+.pytest_cache/
+*.egg-info/
+build/
+*.egg-info/

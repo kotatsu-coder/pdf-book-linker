@@ -1,0 +1,30 @@
+[project]
+name = "pdf-book-linker"
+version = "0.1.0"
+description = "スキャン本の PDF に目次・索引・本文参照の内部リンク、しおり、ナビボタンを追加するローカルツール"
+readme = "README.md"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = [
+    "pymupdf>=2.1",
+]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+pdf-book-linker = "pdf_book_linker.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
