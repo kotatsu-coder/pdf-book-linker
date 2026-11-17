@@ -1,97 +1,104 @@
 # pdf-book-linker
 
-自分でスキャンした本の PDF に、**目次・索引・本文中の「○ページ参照」から該当ページへ飛べる内部リンク**と、**階層つきのしおり（PDF アウトライン）**、**章を行き来する薄いナビボタン**を追加するローカルツールです。
+English | [日本語](README.ja.md)
 
-iPad の Goodnotes などで、電子書籍のように目次と本文と索引を行き来しながら読むことを想定しています。教科書・参考書・技術書・資格試験の本・攻略本など、目次やページ番号がある本ならジャンルを問いません。
+A local tool that turns the PDF of a book you scanned yourself into something you can navigate like an e-book. It adds:
 
-- 処理はすべて手元の PC で行います。本のデータを外部に送信しません。
-- 元の PDF は変更しません。結果は別ファイルに書き出します。
-- ページ画像を再圧縮・再描画しません（リンク・しおり・ボタンの線を足すだけです）。
+- **clickable links** from the table of contents, the index, and in-text page references ("see p. 45") to the right page,
+- a **hierarchical outline** (PDF bookmarks), and
+- faint **navigation buttons** for moving between chapters.
+
+It is meant for reading on an iPad in apps such as Goodnotes, jumping back and forth between the contents, the text and the index. Textbooks, reference books, technical books, exam guides, game guides — any book with a table of contents and page numbers.
+
+- Everything runs on your own computer. No book data is sent anywhere.
+- The source PDF is never modified; the result is written to a new file.
+- Page images are not re-compressed or re-rendered. The tool only adds links, bookmarks and the button outlines.
 
 > [!IMPORTANT]
-> **自分が正当に所有する本の、個人的な利用のためのツールです。** DRM やコピー防止を解除する機能はなく、そうした用途を想定していません。作成した PDF を他人に配布しないでください。
+> **This tool is for personal use with books you legally own.** It has no feature for removing DRM or copy protection and is not intended for that. Do not distribute the PDFs you create.
 
-## できること
+> [!NOTE]
+> The tool has mainly been developed and tested with **Japanese books** (Japanese table-of-contents layouts, index formats and page-reference phrases). Books in other languages may need manual overrides. The command-line messages and reports are currently in Japanese.
 
-| 機能 | 内容 |
+## Features
+
+| Feature | What it does |
 |---|---|
-| 目次リンク | 目次の各行（タイトル部分と数字部分）を押すと、その章へ移動 |
-| 章扉の小目次 | 各章（PART）の扉にある小目次にもリンク |
-| 索引リンク | 「関数 125, 128, 132」の各数字をそれぞれ別のリンクに |
-| 本文のページ参照 | 「○ページ参照」「45頁」「p.123」などを該当ページへ |
-| しおり | 前付け・章・索引見出しを階層化した PDF アウトライン |
-| ナビボタン | ←← 目次 / ← 章の先頭 / → 次の章 / →→ 索引。本ごとに余白を測って配置 |
-| ページ対応 | 印刷されたページ番号と PDF のページ番号の対応を自動で推定 |
-| 検証 | 画像が変わっていないこと、リンク先が存在することなどを自動点検 |
+| Table of contents | Each TOC line (both the title and the page number) links to its chapter |
+| Part mini-TOCs | Small contents lists on part title pages are linked too |
+| Index | Each number in an entry like "function 125, 128, 132" becomes its own link |
+| In-text page references | Phrases like "p.123" (and Japanese forms such as 「45頁」) link to the page |
+| Outline | A PDF outline built from front matter, chapters and index headings |
+| Navigation buttons | ←← contents / ← start of chapter / → next chapter / →→ index, placed in each book's free margin |
+| Page mapping | Works out how printed page numbers map to PDF pages |
+| Verification | Checks that page images are unchanged and that link targets exist |
 
-ナビボタンの ← は、章の途中では今の章の先頭へ、章扉では一つ前の章へ移動します。
+The ← button goes to the start of the current chapter; on a part title page it goes to the previous part.
 
-## 必要なもの
+## Requirements
 
-- Windows 11 で開発・確認しています（macOS / Linux は未確認ですが、OS 依存の部分は分岐してあります）
-- Python 3.12 以上と [uv](https://docs.astral.sh/uv/)
-- **文字層（OCR 済みのテキスト）がある PDF**。スキャンしただけで文字が選択できない PDF は、先に OCR をかけてください（このツールは全文 OCR をしません）。
-- 任意：[Tesseract](https://github.com/tesseract-ocr/tesseract)（日本語データ `jpn` 付き）。目次の見出しや数字だけ OCR が抜けている本の補助に使います。なくても動きます。
+- Developed and tested on Windows 11. macOS and Linux have not been tested, but OS-specific code paths are handled.
+- Python 3.12+ and [uv](https://docs.astral.sh/uv/)
+- **A PDF with a text layer (OCR already applied).** If you cannot select text in your PDF, run OCR first — this tool does not OCR whole books.
+- Optional: [Tesseract](https://github.com/tesseract-ocr/tesseract) (with the `jpn` language data) to help with books whose TOC headings or numbers are missing from the text layer. Not required.
 
-## インストール
+## Installation
 
 ```bash
-git clone https://github.com/<your-account>/pdf-book-linker.git
+git clone https://github.com/kotatsu-coder/pdf-book-linker.git
 cd pdf-book-linker
 uv sync
 uv run pdf-book-linker --help
 ```
 
-Windows の PowerShell で日本語が文字化けする場合は、先に `$env:PYTHONIOENCODING = 'utf-8'` を実行してください。
+If Japanese text is garbled in Windows PowerShell, run `$env:PYTHONIOENCODING = 'utf-8'` first.
 
-## まず試す（デモ本）
+## Try it with the demo book
 
-著作権の問題がない架空の攻略本 PDF を作って、一通り試せます。
+You can generate a fictional game-guide PDF with no copyright issues and try everything on it:
 
 ```bash
 uv run python tools/make_demo_book.py -o work/demo.pdf
 uv run pdf-book-linker build work/demo.pdf -o output/demo_linked.pdf --report-root output/report
 ```
 
-`output/demo_linked.pdf` を PDF ビューアや Goodnotes で開き、目次・索引・ボタンを押してみてください。`output/report/` に判定の報告とプレビュー画像が出ます。
+Open `output/demo_linked.pdf` in a PDF viewer or Goodnotes and tap the contents, the index and the buttons. A report and preview images are written to `output/report/`.
 
-デモ本を `batch` で判定すると `needs review`（一部ナビ省略）になります。全面が濃い色の章扉ページでは、ボタンが目立たないよう配置を省くためです。報告の読み方の例として見てください。
+Running `batch` on the demo book gives `needs review` (some buttons omitted): on the full-bleed dark part title pages the tool leaves the buttons out. It is a useful example of how to read the report.
 
-## 自分の本で使う
+## Using it with your own books
 
-### 1冊を処理する
-
-```bash
-uv run pdf-book-linker build "本.pdf" -o "output/本_linked.pdf" --report-root output/report
-```
-
-目次・索引・章扉・ページ対応・ナビの位置を自動で判定し、リンク付き PDF を作り、検証まで行います。結果は `output/report/<本の名前>/` の `autoconfig_report.md` とプレビュー PNG で確認できます。
-
-### フォルダ内の本をまとめて判定する
+### One book
 
 ```bash
-uv run pdf-book-linker batch "本のフォルダ" --report-root output/report --work-root work
+uv run pdf-book-linker build "book.pdf" -o "output/book_linked.pdf" --report-root output/report
 ```
 
-サブフォルダを含む全 PDF を1冊ずつ判定し、`output/report/summary.md`（と Excel で開ける `summary.csv`）に、出来の悪い順の一覧を出します。**この段階では PDF は作りません。** 一覧で `ok` になった本、または補正した本から `build` で作ってください。
+This detects the contents, index, part pages, page mapping and button positions, creates the linked PDF and verifies it. Check the result in `autoconfig_report.md` and the preview PNGs under `output/report/<book name>/`.
 
-- 途中で止めても、同じコマンドで続きから再開できます（全部やり直すときは `--force`）。
-- メモリに余裕があれば `--jobs 2`〜`4` で並列にできます。
+### A whole folder
 
-一覧の状態の意味は次のとおりです。
+```bash
+uv run pdf-book-linker batch "books folder" --report-root output/report --work-root work
+```
 
-| 状態 | 意味 |
+Every PDF in the folder (including subfolders) is analysed one at a time, and `output/report/summary.md` (plus `summary.csv` for Excel) lists the books worst first. **No PDFs are created at this stage** — run `build` for the books marked `ok`, or for the ones you have fixed.
+
+- If you stop it, the same command resumes where it left off (`--force` starts over).
+- With enough memory, `--jobs 2` to `4` processes books in parallel.
+
+| Status | Meaning |
 |---|---|
-| `ok` | 自動判定の指標が基準を満たした（それでも中身の確認はおすすめします） |
-| `needs review` | 一部の指標が基準未満。報告とプレビューを見て、必要なら補正 |
-| `OCR required` | 文字層がない、または足りない。先に OCR が必要 |
-| `failed` | 処理中のエラー |
+| `ok` | The automatic checks passed (a quick look is still recommended) |
+| `needs review` | Some checks fell short. Look at the report and previews and add overrides if needed |
+| `OCR required` | No or too little text layer. Run OCR first |
+| `failed` | An error occurred during processing |
 
-一致率などの数字は、ツールが自分で確かめた目安で、正解率ではありません。
+The match rates in the report are the tool's own consistency checks, not measured accuracy.
 
-### うまくいかない本を補正する
+### Fixing books that don't work
 
-自動判定が外れた項目だけを、小さな JSON で上書きできます。ページは **0 始まりの PDF のページ番号**です（PDF ビューアで「1 ページ目」と表示されるページが 0）。
+You can override just the parts the automatic detection got wrong with a small JSON file. Pages are **0-based PDF page indexes** (the page your viewer calls "page 1" is 0).
 
 ```json
 {
@@ -103,42 +110,42 @@ uv run pdf-book-linker batch "本のフォルダ" --report-root output/report --
 ```
 
 ```bash
-uv run pdf-book-linker build "本.pdf" -o "output/本_linked.pdf" --config "本.override.json"
+uv run pdf-book-linker build "book.pdf" -o "output/book_linked.pdf" --config "book.override.json"
 ```
 
-`batch` で使う場合は、`--override-root <フォルダ>` を指定し、`<本のslug>.json` という名前で置きます（slug は報告フォルダの名前と同じです）。
+For `batch`, pass `--override-root <folder>` and name each file `<book slug>.json` (the slug is the name of the book's report folder).
 
-よく使う補正：
+Common overrides:
 
-| やりたいこと | 書き方の例 |
+| To do this | Example |
 |---|---|
-| 目次・索引のページを指定 | `"toc_pages": [4,5]`、`"index_page_range": [400, 420]` |
-| 索引の段数を指定 | `"index": {"columns": 3}` |
-| 印刷ページ番号との対応を指定 | `"pagemap": {"segments": [{"pdf_index0_start": 8, "pdf_index0_end": 218, "print_start": 1, "style": "arabic"}]}` |
-| ナビの位置 | `"nav": {"position": {"left": "bottom-outer", "right": "outer-edge"}}`（`bottom-centre` / `bottom-outer` / `top-outer` / `outer-edge`） |
-| ナビの大きさ・濃さ | `"nav": {"size": 0.05, "opacity": 0.25}`（size はページ幅に対する比率） |
+| Set the contents / index pages | `"toc_pages": [4,5]`, `"index_page_range": [400, 420]` |
+| Set the number of index columns | `"index": {"columns": 3}` |
+| Set the printed-page mapping | `"pagemap": {"segments": [{"pdf_index0_start": 8, "pdf_index0_end": 218, "print_start": 1, "style": "arabic"}]}` |
+| Button position | `"nav": {"position": {"left": "bottom-outer", "right": "outer-edge"}}` (`bottom-centre` / `bottom-outer` / `top-outer` / `outer-edge`) |
+| Button size / opacity | `"nav": {"size": 0.05, "opacity": 0.25}` (size is a fraction of the page width) |
 
-すべての項目と判定の仕組みは [docs/reference.md](docs/reference.md) にあります。
+All options and how detection works are described in [docs/reference.md](docs/reference.md) (Japanese).
 
-## 限界
+## Limitations
 
-- **Goodnotes での動作は保証しません。** 作者の環境では目次などの基本的なリンクが Goodnotes で動くことを確認していますが、端末やアプリの版による違い、手書き後や再エクスポート後の挙動は確認しきれていません。確認方法は [docs/goodnotes_checklist.md](docs/goodnotes_checklist.md) にあります。
-- Goodnotes には「戻る」機能がないため、リンクで飛んだ後に元の場所へ戻るボタンは作れません。
-- 判定は既存の文字層に頼ります。OCR の誤認識、縦書き、見開きスキャン、特殊な段組の本では補正が必要になることがあります。
-- 図・表番号（「図3-2」など）へのリンクはまだありません。
-- 上下巻で共通の索引のように、別の PDF を指す項目にはリンクできません。
-- 低信頼度の候補はリンクにせず、報告で「要確認」として残します。
+- **Goodnotes behaviour is not guaranteed.** Basic links such as the table of contents have been confirmed to work in Goodnotes on the author's device, but behaviour across devices and app versions, after handwriting, or after re-exporting has not been fully tested. See [docs/goodnotes_checklist.md](docs/goodnotes_checklist.md) (Japanese) for a test checklist.
+- Goodnotes has no "back" function, so there is no button to return to where you came from after following a link.
+- Detection relies on the existing text layer. OCR errors, vertical text, two-page spreads and unusual layouts may need overrides.
+- Figure and table references ("Fig. 3-2") are not linked yet.
+- Entries that point to another PDF (such as a shared index across volumes) cannot be linked.
+- Low-confidence candidates are not turned into links; they are listed as "needs review" in the report.
 
-## 開発
+## Development
 
 ```bash
 uv run pytest -q
 ```
 
-テストは合成データとデモ本だけを使います。実在の書籍データ（PDF・抽出テキスト・中間 JSON）はリポジトリに入れないでください（`.gitignore` で `work/`・`output/`・`*.pdf` を除外しています）。設計は [docs/design.md](docs/design.md)、当初の要件は [docs/requirements.md](docs/requirements.md) を参照してください。
+Tests use only synthetic data and the demo book. Do not add real book data (PDFs, extracted text, intermediate JSON) to the repository — `work/`, `output/` and `*.pdf` are ignored by `.gitignore`. See [docs/design.md](docs/design.md) for the design and [docs/requirements.md](docs/requirements.md) for the original requirements (both in Japanese).
 
-## ライセンス
+## License
 
-[GNU AGPL v3.0](LICENSE)。PDF 処理に AGPL の [PyMuPDF](https://github.com/pymupdf/PyMuPDF) を使っているため、このツールも AGPL で公開しています。
+[GNU AGPL v3.0](LICENSE). The tool uses [PyMuPDF](https://github.com/pymupdf/PyMuPDF), which is AGPL-licensed, so this tool is released under the AGPL as well.
 
-本ツールは無保証です。作成した PDF の内容（リンク先の正しさを含む）は、利用者自身で確認してください。
+This software comes with no warranty. Please check the PDFs you create yourself, including whether the links point to the right pages.
