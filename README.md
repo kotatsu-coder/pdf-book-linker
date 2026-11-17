@@ -29,7 +29,7 @@ It is meant for reading on an iPad in apps such as Goodnotes, jumping back and f
 | Index | Each number in an entry like "function 125, 128, 132" becomes its own link |
 | In-text page references | "p.12", "pp.12-14", "page 12", "pages 12-14" (and Japanese forms such as 「45頁」) link to the page |
 | Outline | A PDF outline built from front matter, chapters and index headings |
-| Navigation buttons | ←← contents / ← start of chapter / → next chapter / →→ index, placed in each book's free margin |
+| Navigation buttons | ←← contents / ← start of chapter / → next chapter / →→ index, placed in each book's free margin; dark lines on light pages, white lines on dark pages |
 | Page mapping | Works out how printed page numbers map to PDF pages |
 | Verification | Checks that page images are unchanged and that link targets exist |
 
@@ -63,8 +63,6 @@ uv run pdf-book-linker build work/demo.pdf -o output/demo_linked.pdf --report-ro
 ```
 
 Open `output/demo_linked.pdf` in a PDF viewer or Goodnotes and tap the contents, the index and the buttons. A report and preview images are written to `output/report/`.
-
-Running `batch` on the demo book gives `needs review` (some buttons omitted): on the full-bleed dark part title pages the tool leaves the buttons out. It is a useful example of how to read the report.
 
 ## Using it with your own books
 
@@ -105,7 +103,7 @@ You can override just the parts the automatic detection got wrong with a small J
   "toc_pages": [4, 5],
   "index_pages": [233, 234, 235],
   "index": {"columns": 2},
-  "nav": {"position": "bottom-outer", "size": 0.055, "opacity": 0.3}
+  "nav": {"position": "bottom-outer", "size": 0.055, "contrast": 4.5}
 }
 ```
 
@@ -123,7 +121,9 @@ Common overrides:
 | Set the number of index columns | `"index": {"columns": 3}` |
 | Set the printed-page mapping | `"pagemap": {"segments": [{"pdf_index0_start": 8, "pdf_index0_end": 218, "print_start": 1, "style": "arabic"}]}` |
 | Button position | `"nav": {"position": {"left": "bottom-outer", "right": "outer-edge"}}` (`bottom-centre` / `bottom-outer` / `top-outer` / `outer-edge`) |
-| Button size / opacity | `"nav": {"size": 0.05, "opacity": 0.25}` (size is a fraction of the page width) |
+| Button size | `"nav": {"size": 0.05}` (a fraction of the page width) |
+| Button visibility | `"nav": {"contrast": 4.5}` — higher is more visible, lower is fainter (default 3.0) |
+| Button colour / opacity | `"nav": {"color": "#1a3c8c", "opacity": 0.4}` (default `"auto"` for both) |
 
 All options and how detection works are described in [docs/reference.md](docs/reference.md) (Japanese).
 

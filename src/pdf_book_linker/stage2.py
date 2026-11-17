@@ -280,7 +280,8 @@ def draw_button(p,c):
     for shift in ([-11,11] if j in (0,3) else [0]):
         xx=x+shift*scale
         shape.draw_polyline([(xx-direction*12*scale,y-18*scale),(xx+direction*12*scale,y),(xx-direction*12*scale,y+18*scale)])
-    shape.finish(color=(gray,gray,gray),width=c['style'].get('line_width',2.5),stroke_opacity=c['style'].get('opacity',1))
+    colour=tuple(c['style']['rgb']) if c['style'].get('rgb') else (gray,gray,gray)
+    shape.finish(color=colour,width=c['style'].get('line_width',2.5),stroke_opacity=c['style'].get('opacity',1))
     shape.commit(overlay=True)
 
 

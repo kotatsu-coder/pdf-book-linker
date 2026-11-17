@@ -260,3 +260,30 @@ def test_common_index_never_links_foreign_volume_to_local_page():
         refs=extract_index(d,[0],pm,dict(columns=1,ymin=50,ymax=250,print_range=[1,30],volume='I'))
         assert [(c['print_page'],c['volume'],c['target_pdf_index0']) for c in refs]==[('12','I',11),('14','II',None)]
         assert refs[1]['status']=='review'
+
+
+def test_nav_button_colour_follows_background():
+    from pdf_book_linker.navigation import button_style, contrast
+    light=button_style((1.,.98,.93),{})
+    dark=button_style((.13,.15,.27),{})
+    assert light['rgb'][0]<.5 and dark['rgb'][0]>.5            # dark lines on paper, white on navy
+    assert light['contrast']>=3 and dark['contrast']>=3
+    fainter=button_style((1.,1.,1.),{'contrast':1.5})
+    assert fainter['opacity']<light['opacity']
+    fixed=button_style((1.,1.,1.),{'color':'#ff0000','opacity':.4})
+    assert fixed['rgb']==[1.0,0.0,0.0] and fixed['opacity']==.4
+    assert contrast((0,0,0),(1,1,1))>20
+
+
+def test_nav_accepts_flat_coloured_background(tmp_path):
+    import pymupdf as f
+    from pdf_book_linker.navigation import Raster
+    doc=f.open(); p=doc.new_page(width=400,height=600)
+    p.draw_rect(p.rect,color=None,fill=(.13,.15,.27))
+    p.insert_text((40,560),'printed text',fontsize=20,color=(1,1,1))
+    r=Raster(p)
+    assert r.clear(f.Rect(300,520,380,590))          # flat navy margin
+    assert not r.clear(f.Rect(30,535,200,570))        # white text on navy
+    q=doc.new_page(width=400,height=600)
+    q.draw_rect(f.Rect(100,500,300,600),color=None,fill=(0,0,0))
+    assert not Raster(q).clear(f.Rect(150,540,250,590))  # solid printed block on white paper

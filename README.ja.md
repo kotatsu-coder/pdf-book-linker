@@ -22,7 +22,7 @@ iPad の Goodnotes などで、電子書籍のように目次と本文と索引�
 | 索引リンク | 「関数 125, 128, 132」の各数字をそれぞれ別のリンクに |
 | 本文のページ参照 | 「○ページ参照」「45頁」「p.12」「pp.12-14」、英語の「page 12」「pages 12-14」などを該当ページへ |
 | しおり | 前付け・章・索引見出しを階層化した PDF アウトライン |
-| ナビボタン | ←← 目次 / ← 章の先頭 / → 次の章 / →→ 索引。本ごとに余白を測って配置 |
+| ナビボタン | ←← 目次 / ← 章の先頭 / → 次の章 / →→ 索引。本ごとに余白を測って配置し、明るいページには濃い線、暗いページには白い線で描く |
 | ページ対応 | 印刷されたページ番号と PDF のページ番号の対応を自動で推定 |
 | 検証 | 画像が変わっていないこと、リンク先が存在することなどを自動点検 |
 
@@ -56,8 +56,6 @@ uv run pdf-book-linker build work/demo.pdf -o output/demo_linked.pdf --report-ro
 ```
 
 `output/demo_linked.pdf` を PDF ビューアや Goodnotes で開き、目次・索引・ボタンを押してみてください。`output/report/` に判定の報告とプレビュー画像が出ます。
-
-デモ本を `batch` で判定すると `needs review`（一部ナビ省略）になります。全面が濃い色の章扉ページでは、ボタンが目立たないよう配置を省くためです。報告の読み方の例として見てください。
 
 ## 自分の本で使う
 
@@ -100,7 +98,7 @@ uv run pdf-book-linker batch "本のフォルダ" --report-root output/report --
   "toc_pages": [4, 5],
   "index_pages": [233, 234, 235],
   "index": {"columns": 2},
-  "nav": {"position": "bottom-outer", "size": 0.055, "opacity": 0.3}
+  "nav": {"position": "bottom-outer", "size": 0.055, "contrast": 4.5}
 }
 ```
 
@@ -118,7 +116,9 @@ uv run pdf-book-linker build "本.pdf" -o "output/本_linked.pdf" --config "本.
 | 索引の段数を指定 | `"index": {"columns": 3}` |
 | 印刷ページ番号との対応を指定 | `"pagemap": {"segments": [{"pdf_index0_start": 8, "pdf_index0_end": 218, "print_start": 1, "style": "arabic"}]}` |
 | ナビの位置 | `"nav": {"position": {"left": "bottom-outer", "right": "outer-edge"}}`（`bottom-centre` / `bottom-outer` / `top-outer` / `outer-edge`） |
-| ナビの大きさ・濃さ | `"nav": {"size": 0.05, "opacity": 0.25}`（size はページ幅に対する比率） |
+| ナビの大きさ | `"nav": {"size": 0.05}`（ページ幅に対する比率） |
+| ナビの見やすさ | `"nav": {"contrast": 4.5}`（大きいほどはっきり、小さいほど控えめ。既定 3.0） |
+| ナビの色・濃さを固定 | `"nav": {"color": "#1a3c8c", "opacity": 0.4}`（どちらも既定は `"auto"`） |
 
 すべての項目と判定の仕組みは [docs/reference.md](docs/reference.md) にあります。
 
