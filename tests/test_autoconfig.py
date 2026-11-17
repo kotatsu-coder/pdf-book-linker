@@ -74,11 +74,12 @@ def test_ocr_needed_and_source_guard(tmp_path,capsys):
     with pytest.raises(ValueError,match='上書き'):
         build(source,source)
 
-@pytest.fixture(scope='module')
-def demo(tmp_path_factory):
-    tmp=tmp_path_factory.mktemp('demo4')
-    spec=importlib.util.spec_from_file_location('demo_generator',Path(__file__).parents[1]/'tools/make_demo_book.py')
+@pytest.fixture(scope='module',params=['ja','en'])
+def demo(tmp_path_factory,request):
+    tmp=tmp_path_factory.mktemp('demo4_'+request.param)
+    spec=importlib.util.spec_from_file_location('demo_generator_'+request.param,Path(__file__).parents[1]/'tools/make_demo_book.py')
     mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
+    mod.set_language(request.param)
     mod.INDEX_LAYOUT[:] = [[], []]
     with f.open() as draft:
         for i,item in enumerate(mod.plan):mod.render(draft,i,item)
@@ -111,6 +112,8 @@ def test_demo_exact_ground_truth(demo):
     for i,item in enumerate(mod.plan):
         if item[0] in ('chA','chB'):
             authored=item[1][3 if item[0]=='chA' else 5][1]
+            # "pp.{p:a}-{p:b}" is one reference to the start of the range.
+            authored=re.sub(r'(pp\.\{p:[^}]+\})-\{p:[^}]+\}',r'\1',authored)
             expected_refs += [(i,mod.starts[k]+3) for k in re.findall(r'\{p:([^}]+)\}',authored)]
     refs={c['logical_reference_id']:(c['source_pdf_index0'],c['target_pdf_index0']) for c in items if c['kind']=='pageref'}
     assert sorted(refs.values())==sorted(expected_refs)
@@ -137,3 +140,15 @@ def test_reference_table_column(tmp_path):
     items=read_json(Path(cfg['work_dir'])/'stage3_candidates.json')['candidates']
     table=[c for c in items if c.get('method')=='reference_table_column']
     assert [(c['source_pdf_index0'],c['target_pdf_index0']) for c in table]==[(1,3)]
+
+
+def test_english_page_references_need_word_gaps():
+    from pdf_book_linker.stage3 import parse_pagerefs
+    # Rows are built without spaces; gaps after "see" restore the word boundary.
+    text='seep.12andpage14'
+    assert [n['number'] for n in parse_pagerefs(text,1,99)]==[]
+    gaps={2,6,9,13}  # after "see", "12", "and", "page"
+    assert [n['number'] for n in parse_pagerefs(text,1,99,gaps=gaps)]==[12,14]
+    rng=parse_pagerefs('pages 10-12, page 3-4',1,99)
+    assert [(n['number'],n['range_end'],n['valid']) for n in rng]==[(10,12,True),(3,4,False)]
+    assert not parse_pagerefs('homepage 12',1,99)

@@ -5,7 +5,9 @@
 - 本も ゲームも 架空。著作権上の問題なく pdf_book_linker のデモ・テストに使える
 
 使い方:
-    .venv\\Scripts\\python tools\\make_demo_book.py [-o demo\\out.pdf]
+    uv run python tools/make_demo_book.py [-o demo/out.pdf] [--lang ja|en]
+
+--lang en で英語版（tools/demo_content_en.py の内容）を生成する。
 """
 from __future__ import annotations
 
@@ -13,6 +15,8 @@ import argparse
 import math
 import re
 from pathlib import Path
+
+import sys
 
 import pymupdf
 
@@ -23,10 +27,12 @@ TEXT_W = W - ML - MR
 FONT_FILES = {"udr": None, "udb": None}
 F = pymupdf.Font("japan")
 FB = F
+LANG = "ja"
+BASE14 = {"udr": "helv", "udb": "hebo"}  # English demo: built-in Helvetica (no embedding needed)
 
 def font_args(page, name):
-    if FONT_FILES[name]:
-        return dict(**font_args(page, name))
+    if LANG == "en" and not FONT_FILES[name]:
+        return dict(fontname=BASE14[name])
     page.insert_font(fontname=name, fontbuffer=(FB if name == "udb" else F).buffer)
     return dict(fontname=name)
 
@@ -125,25 +131,68 @@ KANA_GROUPS = [("あ", "あいうえお"), ("か", "かきくけこがぎぐげ�
                ("た", "たちつてとだぢづでど"), ("な", "なにぬねの"), ("は", "はひふへほばびぶべぼぱぴぷぺぽ"),
                ("ま", "まみむめも"), ("や", "やゆよ"), ("ら", "らりるれろ"), ("わ", "わをん")]
 
+STR = {
+    "cover_kicker": "ACTION RPG", "cover_title": "ルミナ遺跡探索記", "cover_sub": "完全攻略ガイド",
+    "cover_tag": "全ステージ・全ボス・やりこみ要素を完全網羅！", "cover_editor": "デモ攻略編集部 編",
+    "cover_note": "※ 本書とゲームは、ツールのデモ用に作った架空のものです",
+    "preface": "はじめに",
+    "preface_body": [
+        "本書は、アクションRPG『ルミナ遺跡探索記』の攻略ガイドです。基本のシステムから、ストーリーの攻略、クリア後のやりこみ要素までを、順を追って解説しています。",
+        "WORLD 1 では操作とステータス、戦闘の流れを、WORLD 2 では4つのステージとボスの倒し方を、WORLD 3 では隠しダンジョンとレア素材、裏ボスの攻略を扱います。巻末のさくいんからは、用語ごとに該当ページを引くことができます。",
+        "なお、本書とゲームはいずれも、PDF にリンクを自動で埋め込むツールの動作を確かめるために作った架空のものです。実在の作品・団体とは関係ありません。"],
+    "contents": "CONTENTS", "contents_sub": "もくじ",
+    "toc_preface": "はじめに", "toc_index": "さくいん", "toc_afterword": "あとがき",
+    "part_list": "このワールドのステージ", "tip": "攻略のコツ",
+    "index": "INDEX", "index_sub": "さくいん",
+    "afterword": "あとがき",
+    "afterword_body": [
+        "最後までお読みいただき、ありがとうございました。本書が、ルミナ遺跡の冒険をより楽しむ手助けになれば幸いです。",
+        "裏ボスの黒曜の守護者は手ごわい相手ですが、スキルツリーと連携技をうまく組み合わせれば、必ず道は開けます。"],
+    "colophon": [("ルミナ遺跡探索記 完全攻略ガイド", 54), ("2026年11月5日　デモ版 第1刷", 40),
+                 ("編者　デモ攻略編集部（架空）", 40), ("※ 本書は pdf_book_linker のデモ用に生成した架空の書籍です", 36)],
+}
+
 ROMAN = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii"]
 
 # ---------------------------------------------------------------- page plan
 FRONT = ["cover", "blank", "preface", "toc"]  # index0 0..3 = i..iv
-plan: list[tuple] = [(k,) for k in FRONT]
-starts: dict[str, int] = {}   # chapter id / "part1" / "index" ... -> printed page
-pno = 1
-for num, ptitle, chapters in PARTS:
-    starts[f"part{num}"] = pno
-    plan.append(("part", num)); pno += 1
-    for ch in chapters:
-        starts[ch[0]] = pno
-        plan.append(("chA", ch)); plan.append(("chB", ch)); pno += 2
-starts["index"] = pno
-plan.append(("index", 0)); plan.append(("index", 1)); pno += 2
-starts["afterword"] = pno
-plan.append(("afterword",)); pno += 1
-plan.append(("colophon",))
 FRONT_COUNT = len(FRONT)
+plan: list[tuple] = []
+starts: dict[str, int] = {}   # chapter id / "part1" / "index" ... -> printed page
+
+
+def build_plan() -> None:
+    plan[:] = [(k,) for k in FRONT]
+    starts.clear()
+    pno = 1
+    for num, ptitle, chapters in PARTS:
+        starts[f"part{num}"] = pno
+        plan.append(("part", num)); pno += 1
+        for ch in chapters:
+            starts[ch[0]] = pno
+            plan.append(("chA", ch)); plan.append(("chB", ch)); pno += 2
+    starts["index"] = pno
+    plan.append(("index", 0)); plan.append(("index", 1)); pno += 2
+    starts["afterword"] = pno
+    plan.append(("afterword",)); pno += 1
+    plan.append(("colophon",))
+
+
+build_plan()
+
+
+def set_language(lang: str) -> None:
+    """Switch content, fonts and the page plan to 'ja' (default) or 'en'."""
+    global LANG, PARTS, INDEX_TERMS, STR, BOOK_TITLE, F, FB
+    if lang == "en":
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import demo_content_en as en
+        PARTS, INDEX_TERMS, STR, BOOK_TITLE = en.PARTS, en.INDEX_TERMS, en.STR, en.BOOK_TITLE
+        F, FB = pymupdf.Font("helv"), pymupdf.Font("hebo")
+    elif lang != "ja":
+        raise ValueError(lang)
+    LANG = lang
+    build_plan()
 
 
 def label(i: int) -> str | None:
@@ -161,6 +210,15 @@ def fill_refs(text: str) -> str:
 
 # ---------------------------------------------------------------- drawing helpers
 def wrap(text: str, size: float, width: float) -> list[str]:
+    if LANG == "en":
+        lines, cur = [], ""
+        for word in text.split():
+            cand = f"{cur} {word}" if cur else word
+            if cur and F.text_length(cand, fontsize=size) > width:
+                lines.append(cur); cur = word
+            else:
+                cur = cand
+        return lines + ([cur] if cur else [])
     lines, cur = [], ""
     for ch in text:
         if F.text_length(cur + ch, fontsize=size) > width and cur and ch not in "。、）」』・":
@@ -182,7 +240,7 @@ def tl(s, size, bold=False):
 
 
 def para(page, y, s, size=44, lh=78, x=ML, width=TEXT_W):
-    for ln in wrap("　" + s, size, width):
+    for ln in wrap(("　" if LANG == "ja" else "") + s, size, width):
         text(page, x, y, ln, size); y += lh
     return y
 
@@ -287,7 +345,7 @@ def tips(page, y, s, size=42, lh=70):
     page.draw_rect(pymupdf.Rect(ML, y, W - MR, y + h), color=NAVY, width=4, dashes="[18 10] 0", radius=0.08)
     page.draw_circle((ML + 90, y + h / 2), 45, color=None, fill=YELLOW)
     text(page, ML + 76, y + h / 2 + 18, "!", 52, NAVY, bold=True)
-    text(page, ML + 170, y + 60, "攻略のコツ", 36, ORANGE, bold=True)
+    text(page, ML + 170, y + 60, STR["tip"], 36, ORANGE, bold=True)
     yy = y + 60 + lh
     for b in body:
         text(page, ML + 170, yy, b, size); yy += lh
@@ -309,36 +367,35 @@ def render(doc, i, item):
         page.draw_polyline([(0, 1250), (W, 850), (W, 1450), (0, 1850)], color=None, fill=ORANGE, closePath=True)
         for cx, cy, r in [(1450, 400, 70), (1250, 620, 40), (1550, 700, 30), (300, 2250, 50), (1500, 2150, 90)]:
             star(page, cx, cy, r, YELLOW)
-        text(page, 180, 700, "ACTION RPG", 60, YELLOW, bold=True)
-        text(page, 180, 900, "ルミナ遺跡探索記", 150, WHITE, bold=True)
-        text(page, 220, 1390, "完全攻略ガイド", 120, NAVY, bold=True)
-        text(page, 180, 2050, "全ステージ・全ボス・やりこみ要素を完全網羅！", 52, WHITE)
-        text(page, 180, 2500, "デモ攻略編集部 編", 50, WHITE)
-        text(page, 180, 2600, "※ 本書とゲームは、ツールのデモ用に作った架空のものです", 36, (0.75, 0.78, 0.9))
+        text(page, 180, 700, STR["cover_kicker"], 60, YELLOW, bold=True)
+        text(page, 180, 900, STR["cover_title"], 150, WHITE, bold=True)
+        text(page, 220, 1390, STR["cover_sub"], 120, NAVY, bold=True)
+        text(page, 180, 2050, STR["cover_tag"], 52, WHITE)
+        text(page, 180, 2500, STR["cover_editor"], 50, WHITE)
+        text(page, 180, 2600, STR["cover_note"], 36, (0.75, 0.78, 0.9))
     elif kind == "blank":
         bg(page)
     elif kind == "preface":
         chrome(page, i)
-        heading(page, 420, "はじめに")
+        heading(page, 420, STR["preface"])
         y = 640
-        for s in ["本書は、アクションRPG『ルミナ遺跡探索記』の攻略ガイドです。基本のシステムから、ストーリーの攻略、クリア後のやりこみ要素までを、順を追って解説しています。",
-                  "WORLD 1 では操作とステータス、戦闘の流れを、WORLD 2 では4つのステージとボスの倒し方を、WORLD 3 では隠しダンジョンとレア素材、裏ボスの攻略を扱います。巻末のさくいんからは、用語ごとに該当ページを引くことができます。",
-                  "なお、本書とゲームはいずれも、PDF にリンクを自動で埋め込むツールの動作を確かめるために作った架空のものです。実在の作品・団体とは関係ありません。"]:
+        for s in STR["preface_body"]:
             y = para(page, y, s) + 40
     elif kind == "toc":
         chrome(page, i)
-        text(page, ML, 430, "CONTENTS", 100, ORANGE, bold=True)
-        text(page, ML + tl("CONTENTS", 100, True) + 40, 430, "もくじ", 50, NAVY, bold=True)
+        text(page, ML, 430, STR["contents"], 100, ORANGE, bold=True)
+        if STR["contents_sub"]:
+            text(page, ML + tl(STR["contents"], 100, True) + 40, 430, STR["contents_sub"], 50, NAVY, bold=True)
         y = 620
-        toc_row(page, y, None, "はじめに", "iii"); y += 110
+        toc_row(page, y, None, STR["toc_preface"], "iii"); y += 110
         for num, ptitle, chapters in PARTS:
             toc_band(page, y, f"WORLD {num}", ptitle, str(starts[f"part{num}"])); y += 108
             for ch in chapters:
                 toc_row(page, y, f"STAGE {ch[0][-1].zfill(2)}", ch[1], str(starts[ch[0]]), x=ML + 40)
                 y += 92
             y += 24
-        toc_row(page, y, None, "さくいん", str(starts["index"])); y += 92
-        toc_row(page, y, None, "あとがき", str(starts["afterword"]))
+        toc_row(page, y, None, STR["toc_index"], str(starts["index"])); y += 92
+        toc_row(page, y, None, STR["toc_afterword"], str(starts["afterword"]))
     elif kind == "part":
         num = item[1]
         _, ptitle, chapters = next(p for p in PARTS if p[0] == num)
@@ -349,7 +406,7 @@ def render(doc, i, item):
         text(page, ML, 780, ptitle, 110, WHITE, bold=True)
         star(page, 1450, 380, 90, YELLOW)
         y = 1560
-        text(page, ML, y - 110, "このワールドのステージ", 44, YELLOW, bold=True)
+        text(page, ML, y - 110, STR["part_list"], 44, YELLOW, bold=True)
         for ch in chapters:
             page.draw_rect(pymupdf.Rect(ML, y - 70, W - MR, y + 34), color=None, fill=CREAM, radius=0.25)
             toc_row(page, y, f"STAGE {ch[0][-1].zfill(2)}", ch[1], str(starts[ch[0]]), size=48, x=ML + 30, rule=False)
@@ -375,21 +432,20 @@ def render(doc, i, item):
     elif kind == "index":
         chrome(page, i)
         if item[1] == 0:
-            text(page, ML, 430, "INDEX", 100, ORANGE, bold=True)
-            text(page, ML + tl("INDEX", 100, True) + 40, 430, "さくいん", 50, NAVY, bold=True)
+            text(page, ML, 430, STR["index"], 100, ORANGE, bold=True)
+            if STR["index_sub"]:
+                text(page, ML + tl(STR["index"], 100, True) + 40, 430, STR["index_sub"], 50, NAVY, bold=True)
         draw_index_page(page, item[1])
     elif kind == "afterword":
         chrome(page, i)
-        heading(page, 420, "あとがき")
+        heading(page, 420, STR["afterword"])
         y = 640
-        for s in ["最後までお読みいただき、ありがとうございました。本書が、ルミナ遺跡の冒険をより楽しむ手助けになれば幸いです。",
-                  "裏ボスの黒曜の守護者は手ごわい相手ですが、スキルツリーと連携技をうまく組み合わせれば、必ず道は開けます。"]:
+        for s in STR["afterword_body"]:
             y = para(page, y, s) + 40
     elif kind == "colophon":
         bg(page)
         y = 1700
-        for s, size in [("ルミナ遺跡探索記 完全攻略ガイド", 54), ("2026年11月5日　デモ版 第1刷", 40),
-                        ("編者　デモ攻略編集部（架空）", 40), ("※ 本書は pdf_book_linker のデモ用に生成した架空の書籍です", 36)]:
+        for s, size in STR["colophon"]:
             text(page, ML, y, s, size, NAVY); y += 100
         page.draw_rect(pymupdf.Rect(ML, 1610, W - MR, 1622), color=None, fill=ORANGE)
     return page
@@ -422,11 +478,19 @@ def build_index(vector_doc) -> None:
             entries.append((term, yomi, pages[:5]))
         else:
             print("索引語が本文に見つからない:", term)
-    groups: list[tuple[str, list]] = [("アルファベット", [e for e in entries if e[1] == "A"])]
-    for g, chars in KANA_GROUPS:
-        items = [e for e in entries if e[1] != "A" and e[1][0] in chars]
-        if items:
-            groups.append((g, sorted(items, key=lambda e: e[1])))
+    if LANG == "en":
+        groups = []
+        for e in sorted(entries, key=lambda e: e[1]):
+            letter = e[1][0].upper()
+            if not groups or groups[-1][0] != letter:
+                groups.append((letter, []))
+            groups[-1][1].append(e)
+    else:
+        groups = [("アルファベット", [e for e in entries if e[1] == "A"])]
+        for g, chars in KANA_GROUPS:
+            items = [e for e in entries if e[1] != "A" and e[1][0] in chars]
+            if items:
+                groups.append((g, sorted(items, key=lambda e: e[1])))
     rows = []
     for g, items in groups:
         rows.append(("head", g, None))
@@ -470,9 +534,13 @@ def to_scanned(vector_doc, out_path: Path, quality: int = 80) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("-o", "--output", default="demo/ルミナ遺跡探索記_攻略ガイド_demo.pdf")
-    ap.add_argument('--font', help='任意の CJK フォントファイル（描画と透明文字層で共用）')
+    ap.add_argument("-o", "--output")
+    ap.add_argument("--lang", choices=["ja", "en"], default="ja", help="demo book language")
+    ap.add_argument('--font', help='任意のフォントファイル（描画と透明文字層で共用）')
     args = ap.parse_args()
+    set_language(args.lang)
+    if args.output is None:
+        args.output = "demo/lumina_guide_demo_en.pdf" if args.lang == "en" else "demo/ルミナ遺跡探索記_攻略ガイド_demo.pdf"
     if args.font:
         global F, FB
         FONT_FILES.update(udr=args.font, udb=args.font)

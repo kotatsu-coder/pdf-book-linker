@@ -21,26 +21,49 @@ def norm(text):
     return re.sub(r'\s+', '', unicodedata.normalize('NFKC', text))
 
 
-def parse_pagerefs(text, low, high):
-    """Return source offsets; explicit page units prevent P100 / P2Y2 matches."""
-    parts = [unicodedata.normalize('NFKC', c) for c in text]
+def word_gaps(chars, ratio=.15):
+    """Indexes i where a visible gap follows chars[i] on the same line.
+
+    Spaces are dropped when rows are built (fine for Japanese), so English
+    word boundaries are recovered from the horizontal distance between glyphs.
+    """
+    gaps = set()
+    for i in range(len(chars) - 1):
+        a, b = chars[i]['bbox'], chars[i + 1]['bbox']
+        height = max(a[3] - a[1], b[3] - b[1], 1e-6)
+        same_line = abs(a[3] - b[3]) < height * .5
+        if same_line and b[0] - a[2] > height * ratio:
+            gaps.add(i)
+    return gaps
+
+
+def parse_pagerefs(text, low, high, gaps=None):
+    """Return source offsets; explicit page units prevent P100 / P2Y2 matches.
+
+    ``gaps`` (from :func:`word_gaps`) marks word boundaries in space-less text,
+    so that English forms such as "see p.12" and "page 12" are recognised.
+    """
+    gaps = gaps or set()
+    parts = [unicodedata.normalize('NFKC', c) + (' ' if i in gaps else '') for i, c in enumerate(text)]
     offsets = [i for i, p in enumerate(parts) for _ in p]
     t = ''.join(parts)
     digit = r'[0-9lIOo]'
     # Broken OCR may insert hyphens inside a Japanese page number. Never
-    # interpret those as a range: only pp. explicitly permits a range.
+    # interpret those as a range: only pp. / "pages" explicitly permit a range.
     pattern = (rf'(?<![A-Za-z0-9])(?:(?P<jp>{digit}(?:[\s-]*{digit}){{0,3}})\s*-?\s*(?:ページ|頁)'
                rf'|(?P<prefix>[pP]{{1,2}}\.)\s*(?P<en>{digit}{{1,4}})'
-               rf'(?:\s*[-–—~〜～]\s*(?P<end>{digit}{{1,4}}))?)(?![A-Za-z0-9])')
+               rf'(?:\s*[-–—~〜～]\s*(?P<end>{digit}{{1,4}}))?'
+               rf'|(?P<word>[Pp]ages?)\s+(?P<wn>\d{{1,4}})(?:\s*(?:[-–—]|to)\s*(?P<wend>\d{{1,4}}))?)(?![A-Za-z0-9])')
     out = []
     for m in re.finditer(pattern, t):
-        raw = m['jp'] or m['en']
+        raw = m['jp'] or m['en'] or m['wn']
         if m['jp'] and not re.search(r'\d',raw): continue
         a = int(re.sub(r'[\s-]', '', raw).translate(s2.DIGITS))
-        b = int((m['end'] or str(a)).translate(s2.DIGITS))
+        b = int((m['end'] or m['wend'] or str(a)).translate(s2.DIGITS))
         damaged = bool(re.search(r'[lIOo-]', raw))
         valid = low <= a <= b <= high
         if m['end'] and len(m['prefix']) != 3: valid = False
+        if m['wend'] and m['word'].lower() != 'pages': valid = False
         out.append(dict(start=offsets[m.start()], end=offsets[m.end()-1]+1,
                         number=a, range_end=b, ocr_fixed=damaged, valid=valid,
                         confidence=.75 if damaged else .99))
@@ -101,7 +124,7 @@ def extract_pagerefs(doc, pages, excluded, pm, cfg):
             previous=''.join(''.join(ch['c'] for ch in line) for line in lines[max(0,lineindex-2):lineindex]
                              if line and 0<cs[0]['bbox'][1]-line[0]['bbox'][1]<doc[i].rect.height*.04
                              and abs(cs[0]['bbox'][0]-line[0]['bbox'][0])<doc[i].rect.width*.3)
-            for n in parse_pagerefs(text, *cfg['print_range']):
+            for n in parse_pagerefs(text, *cfg['print_range'], gaps=word_gaps(cs)):
                 chunk = cs[n['start']:n['end']]
                 physical=[]
                 for char in chunk:
@@ -239,6 +262,12 @@ def semantic_index(doc, items, text_provider=None):
         corpus = text(t) + (text(t-1) if t else '')
         probes = m[0][:4]
         hit = probes in corpus or probes[:2] in corpus
+        if not hit and re.match(r'[A-Za-z]', m[0]):
+            # English terms may differ only in case ("camp" / "Camping"). A short
+            # case-insensitive probe is too lenient, so require the whole term.
+            letters = lambda s: re.sub(r'[^a-z]', '', s.casefold())
+            whole = letters(c['term'])
+            hit = len(whole) >= 3 and whole in letters(corpus)
         c['semantic_check'] = 'pass' if hit else 'review: term absent on target and preceding page'
         if not hit:
             if c['status']=='approved': changed += 1

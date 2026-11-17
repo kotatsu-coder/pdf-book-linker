@@ -342,6 +342,19 @@ def target_hit(title, corpus):
     grams=[probe[i:i+2] for i in range(len(probe)-1)]
     return sum(g in corpus for g in grams)/len(grams)>=.7
 
+def latin_spaced(cs):
+    """Join characters, restoring a space at visible gaps between ASCII letters/digits.
+
+    Character rows drop spaces (right for Japanese); English titles such as
+    "Controls and Camping" or "Preface iii" need their word boundaries back.
+    """
+    gaps=s3.word_gaps(cs); out=[]
+    for i,c in enumerate(cs):
+        out.append(c['c'])
+        if i in gaps and i+1<len(cs) and c['c'].isascii() and c['c'].isalnum() and cs[i+1]['c'].isascii() and cs[i+1]['c'].isalnum():
+            out.append(' ')
+    return ''.join(out)
+
 def token_rect(page, row, token):
     clip=f.Rect(row['rect'])+(-.2,-.2,.2,.2)
     hits=page.search_for(token,clip=clip)
@@ -552,7 +565,7 @@ def autoconfig(source, work_root='work/auto', report_root=None, override=None):
                     charrows=[]
                     for cs in s2.rows(doc[i],ymin=doc[i].rect.height*ymin,ymax=doc[i].rect.height*ymax,
                                       columns=columns or ft['columns'],include_spaces=False,tolerance_ratio=.00824):
-                        rect=s2.box(cs); row=dict(text=''.join(c['c'] for c in cs),rect=list(rect),display_rect=list(rect),
+                        rect=s2.box(cs); row=dict(text=latin_spaced(cs),rect=list(rect),display_rect=list(rect),
                             x=rect.x0/doc[i].rect.width,y=rect.y0/doc[i].rect.height,size=rect.height/doc[i].rect.height,
                             col=min((columns or ft['columns'])-1,int(rect.x0/doc[i].rect.width*(columns or ft['columns']))))
                         entry=terminal_entry(row,count*2)

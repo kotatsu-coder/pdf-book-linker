@@ -18,7 +18,7 @@ It is meant for reading on an iPad in apps such as Goodnotes, jumping back and f
 > **This tool is for personal use with books you legally own.** It has no feature for removing DRM or copy protection and is not intended for that. Do not distribute the PDFs you create.
 
 > [!NOTE]
-> The tool has mainly been developed and tested with **Japanese books** (Japanese table-of-contents layouts, index formats and page-reference phrases). Books in other languages may need manual overrides. The command-line messages and reports are currently in Japanese.
+> The tool has mainly been developed and tested with **Japanese books**. English is checked with an English demo book (see below), but real English books have not been tested much yet and may need manual overrides. The command-line messages and reports are currently in Japanese.
 
 ## Features
 
@@ -27,7 +27,7 @@ It is meant for reading on an iPad in apps such as Goodnotes, jumping back and f
 | Table of contents | Each TOC line (both the title and the page number) links to its chapter |
 | Part mini-TOCs | Small contents lists on part title pages are linked too |
 | Index | Each number in an entry like "function 125, 128, 132" becomes its own link |
-| In-text page references | Phrases like "p.123" (and Japanese forms such as 「45頁」) link to the page |
+| In-text page references | "p.12", "pp.12-14", "page 12", "pages 12-14" (and Japanese forms such as 「45頁」) link to the page |
 | Outline | A PDF outline built from front matter, chapters and index headings |
 | Navigation buttons | ←← contents / ← start of chapter / → next chapter / →→ index, placed in each book's free margin |
 | Page mapping | Works out how printed page numbers map to PDF pages |
@@ -55,10 +55,10 @@ If Japanese text is garbled in Windows PowerShell, run `$env:PYTHONIOENCODING = 
 
 ## Try it with the demo book
 
-You can generate a fictional game-guide PDF with no copyright issues and try everything on it:
+You can generate a fictional game-guide PDF with no copyright issues and try everything on it. `--lang en` makes the English edition (omit it for the Japanese one):
 
 ```bash
-uv run python tools/make_demo_book.py -o work/demo.pdf
+uv run python tools/make_demo_book.py --lang en -o work/demo.pdf
 uv run pdf-book-linker build work/demo.pdf -o output/demo_linked.pdf --report-root output/report
 ```
 
